@@ -24,7 +24,7 @@ def check():
     numBlocks = status['numBlocks']
     sealersCount = len(status['sealerActivity'])
     for sealer, sealedBlock in status['sealerActivity'].items():
-        if sealedBlock < (numBlocks/sealersCount - SEALING_BORDER):
+        if sealedBlock <= max(0, (numBlocks/sealersCount - SEALING_BORDER)):
             alert(f'IDChain node {sealer}  is not sealing blocks!')
 
 if __name__ == '__main__':

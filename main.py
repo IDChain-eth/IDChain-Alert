@@ -38,6 +38,13 @@ def check():
         if sealedBlock <= max(0, (numBlocks/sealersCount - SEALING_BORDER)):
             alert(f'IDChain node {sealer}  is not sealing blocks!')
 
+    payload = json.dumps({"jsonrpc": "2.0", "method": "eth_getBlockByNumber", "params": ["latest", False], "id": 1})
+    headers = {'content-type': "application/json", 'cache-control': "no-cache"}
+    r = requests.request("POST", IDCHAIN_RPC_URL, data=payload, headers=headers)
+    block = r.json()['result']
+    if time.time() - int(block['timestamp'], 16) > DEADLOCK_BORDER:
+        alert(f'IDChain locked!!!')
+
 if __name__ == '__main__':
     while True:
         try:
@@ -46,4 +53,4 @@ if __name__ == '__main__':
         except KeyboardInterrupt as e:
             raise
         except Exception as e:
-            print(e)
+            print('error', e)

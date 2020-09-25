@@ -31,6 +31,11 @@ def alert(msg):
         except Exception as e:
             print('telegram error', e)
 
+def getIDChainBalance(addr):
+    payload = json.dumps({"jsonrpc": "2.0", "method": "eth_getBalance", "params": [addr, 'latest'], "id": 1})
+    headers = {'content-type': "application/json", 'cache-control': "no-cache"}
+    r = requests.request("POST", IDCHAIN_RPC_URL, data=payload, headers=headers)
+    return int(r.json()['result'], 0) / 10**18
 
 def check():
     payload = json.dumps({"jsonrpc": "2.0", "method": "clique_status", "params": [], "id": 1})
@@ -49,6 +54,14 @@ def check():
     block = r.json()['result']
     if time.time() - int(block['timestamp'], 16) > DEADLOCK_BORDER:
         alert(f'IDChain locked!!!')
+
+    balance = getIDChainBalance(RELAYER_ETH_ADDRESS)
+    if balance < BALANCE_BORDER:
+        alert('Relayer does not have enough Eidi balance to send required transactions!')
+
+    r = requests.post('https://idchain.one/begin/api/claim', json={'addr': ''})
+    if r.status_code != 200:
+        alert('Relayer service is not responding!')
 
 if __name__ == '__main__':
     while True:

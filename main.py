@@ -55,9 +55,13 @@ def check():
     if time.time() - int(block['timestamp'], 16) > DEADLOCK_BORDER:
         alert(f'IDChain locked!!!')
 
+    balance = getIDChainBalance(DISTRIBUTION_ETH_ADDRESS)
+    if balance < DISTRIBUTION_BALANCE_BORDER:
+        alert('Distribution contract does not have enough Eidi for new users!')
+
     balance = getIDChainBalance(RELAYER_ETH_ADDRESS)
-    if balance < BALANCE_BORDER:
-        alert('Relayer does not have enough Eidi balance to send required transactions!')
+    if balance < RELAYER_BALANCE_BORDER:
+        alert('Relayer does not have enough Eidi to send required transactions!')
 
     r = requests.post('https://idchain.one/begin/api/claim', json={'addr': ''})
     if r.status_code != 200:

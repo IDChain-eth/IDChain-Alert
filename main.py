@@ -1,78 +1,273 @@
+import pykeybasebot.types.chat1 as chat1
+from pykeybasebot import Bot
+from hashlib import sha256
+import threading
+import requests
+import asyncio
+import base64
 import json
 import time
-import asyncio
-import requests
-from pykeybasebot import Bot
-import pykeybasebot.types.chat1 as chat1
-from config import *
+import config
 
-sent = {}
-keybaseBot = None
-if KEYBASE_BOT_KEY:
-    keybaseBot = Bot(username=KEYBASE_BOT_USERNAME, paperkey=KEYBASE_BOT_KEY, handler=None)
+issues = {}
+last_sent_alert = time.time()
+keybase_bot = None
+if config.KEYBASE_BOT_KEY:
+    keybase_bot = Bot(
+        username=config.KEYBASE_BOT_USERNAME,
+        paperkey=config.KEYBASE_BOT_KEY,
+        handler=None
+    )
+
+
+def issue_hash(service, issue_name):
+    message = (service + issue_name).encode('ascii')
+    h = base64.b64encode(sha256(message).digest()).decode('ascii')
+    return h.replace('/', '_').replace('+', '-').replace('=', '')
+
 
 def alert(msg):
-    if msg in sent and time.time() - sent[msg] < SENT_TIMEOUT:
-        return
-    print(time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime()), msg)
-    sent[msg] = int(time.time())
-    if KEYBASE_BOT_KEY:
+    global last_sent_alert
+    print(time.strftime('%a, %d %b %Y %H:%M:%S', time.gmtime()), msg)
+    if config.KEYBASE_BOT_KEY:
         try:
-            channel = chat1.ChatChannel(**KEYBASE_BOT_CHANNEL)
-            asyncio.run(keybaseBot.chat.send(channel, msg))
+            channel = chat1.ChatChannel(**config.KEYBASE_BOT_CHANNEL)
+            asyncio.run(keybase_bot.chat.send(channel, msg))
+            keybase_done = True
         except Exception as e:
             print('keybase error', e)
-    if TELEGRAM_BOT_KEY:
+            keybase_done = False
+    if config.TELEGRAM_BOT_KEY:
         try:
-            payload = json.dumps({"chat_id": TELEGRAM_BOT_CHANNEL, "text": msg})
-            headers = {'content-type': "application/json", 'cache-control': "no-cache"}
-            url = f'https://api.telegram.org/bot{TELEGRAM_BOT_KEY}/sendMessage'
-            r = requests.post(url, data=payload, headers=headers)
+            payload = json.dumps(
+                {'chat_id': config.TELEGRAM_BOT_CHANNEL, 'text': msg})
+            headers = {'content-type': 'application/json',
+                       'cache-control': 'no-cache'}
+            url = f'https://api.telegram.org/bot{config.TELEGRAM_BOT_KEY}/sendMessage'
+            requests.post(url, data=payload, headers=headers)
+            telegram_done = True
         except Exception as e:
             print('telegram error', e)
+            telegram_done = False
+    if keybase_done or telegram_done:
+        last_sent_alert = time.time()
+    return keybase_done or telegram_done
 
-def getIDChainBalance(addr):
-    payload = json.dumps({"jsonrpc": "2.0", "method": "eth_getBalance", "params": [addr, 'latest'], "id": 1})
-    headers = {'content-type': "application/json", 'cache-control': "no-cache"}
-    r = requests.request("POST", IDCHAIN_RPC_URL, data=payload, headers=headers)
+
+def check_issues():
+    for key in list(issues.keys()):
+        issue = issues[key]
+        if issue['resolved']:
+            res = alert(issue['message'])
+            if res:
+                del issues[key]
+            continue
+
+        if issue['last_alert'] == 0:
+            res = alert(issue['message'])
+            if res:
+                issue['last_alert'] = time.time()
+                issue['alert_number'] += 1
+            continue
+
+        next_interval = min(config.MIN_MSG_INTERVAL * 2 **
+                            (issue['alert_number'] - 1), config.MAX_MSG_INTERVAL)
+        next_alert = issue['last_alert'] + next_interval
+        if next_alert <= time.time():
+            res = alert(issue['message'])
+            if res:
+                issue['last_alert'] = time.time()
+                issue['alert_number'] += 1
+    if time.time() - last_sent_alert > 24 * 60 * 60 and len(issues) == 0:
+        res = alert("There wasn't any issue in the past 24 hours")
+
+
+def get_eidi_balance(addr):
+    payload = json.dumps({
+        'jsonrpc': '2.0',
+        'method': 'eth_getBalance',
+        'params': [addr, 'latest'],
+        'id': 1
+    })
+    headers = {'content-type': 'application/json', 'cache-control': 'no-cache'}
+    r = requests.request('POST', config.IDCHAIN_RPC_URL,
+                         data=payload, headers=headers)
     return int(r.json()['result'], 0) / 10**18
 
-def check():
-    payload = json.dumps({"jsonrpc": "2.0", "method": "clique_status", "params": [], "id": 1})
-    headers = {'content-type': "application/json", 'cache-control': "no-cache"}
-    r = requests.request("POST", IDCHAIN_RPC_URL, data=payload, headers=headers)
+
+def check_sealers_activity():
+    payload = json.dumps({
+        'jsonrpc': '2.0',
+        'method': 'clique_status',
+        'params': [],
+        'id': 1
+    })
+    headers = {'content-type': 'application/json', 'cache-control': 'no-cache'}
+    r = requests.request('POST', config.IDCHAIN_RPC_URL,
+                         data=payload, headers=headers)
     status = r.json()['result']
-    numBlocks = status['numBlocks']
-    sealersCount = len(status['sealerActivity'])
-    for sealer, sealedBlock in status['sealerActivity'].items():
-        if sealedBlock <= max(0, (numBlocks/sealersCount - SEALING_BORDER)):
-            alert(f'IDChain node {sealer}  is not sealing blocks!')
+    num_blocks = status['numBlocks']
+    sealers_count = len(status['sealerActivity'])
+    for sealer, sealed_block in status['sealerActivity'].items():
+        key = issue_hash(sealer, 'not sealing')
+        if sealed_block <= max(0, (num_blocks / sealers_count - config.SEALING_BORDER)):
+            if key not in issues:
+                issues[key] = {
+                    'resolved': False,
+                    'message': f'IDChain node {sealer} is not sealing blocks!',
+                    'started_at': int(time.time()),
+                    'last_alert': 0,
+                    'alert_number': 0
+                }
+        else:
+            if key in issues:
+                issues[key]['resolved'] = True
+                issues[key]['message'] = f'IDChain node {sealer} sealing issue is resolved.'
 
-    payload = json.dumps({"jsonrpc": "2.0", "method": "eth_getBlockByNumber", "params": ["latest", False], "id": 1})
-    headers = {'content-type': "application/json", 'cache-control': "no-cache"}
-    r = requests.request("POST", IDCHAIN_RPC_URL, data=payload, headers=headers)
+
+def check_idchain_lock():
+    payload = json.dumps({
+        'jsonrpc': '2.0',
+        'method': 'eth_getBlockByNumber',
+        'params': ['latest', False],
+        'id': 1
+    })
+    headers = {'content-type': 'application/json', 'cache-control': 'no-cache'}
+    r = requests.request('POST', config.IDCHAIN_RPC_URL,
+                         data=payload, headers=headers)
     block = r.json()['result']
-    if time.time() - int(block['timestamp'], 16) > DEADLOCK_BORDER:
-        alert(f'IDChain locked!!!')
+    key = issue_hash('blockchain', 'idchain locked')
+    if time.time() - int(block['timestamp'], 16) > config.DEADLOCK_BORDER:
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': 'IDChain locked!!!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+    else:
+        if key in issues:
+            issues[key]['resolved'] = True
+            issues[key]['message'] = 'IDChain lock issue is resolved.'
 
-    balance = getIDChainBalance(DISTRIBUTION_ETH_ADDRESS)
-    if balance < DISTRIBUTION_BALANCE_BORDER:
-        alert('Distribution contract does not have enough Eidi for new users!')
 
-    balance = getIDChainBalance(RELAYER_ETH_ADDRESS)
-    if balance < RELAYER_BALANCE_BORDER:
-        alert('Relayer does not have enough Eidi to send required transactions!')
+def check_distributor_balance():
+    key = issue_hash(config.DISTRIBUTION_ETH_ADDRESS, 'eidi balance')
+    balance = get_eidi_balance(config.DISTRIBUTION_ETH_ADDRESS)
+    if balance < config.DISTRIBUTION_BALANCE_BORDER:
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': 'Distribution contract does not have enough Eidi!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+    else:
+        if key in issues:
+            issues[key]['resolved'] = True
+            issues[key]['message'] = 'Distribution contract Eidi balance issue is resolved.'
 
+
+def check_relayer_balance():
+    key = issue_hash(config.RELAYER_ETH_ADDRESS, 'eidi balance')
+    balance = get_eidi_balance(config.RELAYER_ETH_ADDRESS)
+    if balance < config.RELAYER_BALANCE_BORDER:
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': 'Relayer does not have enough Eidi!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+    else:
+        if key in issues:
+            issues[key]['resolved'] = True
+            issues[key]['message'] = 'Relayer service Eidi balance issue is resolved.'
+
+
+def check_relayer_service():
+    key = issue_hash('https://idchain.one/begin/api/claim', 'relayer service')
     r = requests.post('https://idchain.one/begin/api/claim', json={'addr': ''})
     if r.status_code != 200:
-        alert('Relayer service is not responding!')
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': 'Relayer service is not responding!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+    else:
+        if key in issues:
+            issues[key]['resolved'] = True
+            issues[key]['message'] = 'Relayer service issue is resolved.'
 
-if __name__ == '__main__':
+
+def check_faucet_sp_balance():
+    key = issue_hash(config.IDCHAIN_APP_URL, 'faucet sp balance')
+    r = requests.get(config.IDCHAIN_APP_URL)
+    idchain_faucet = r.json().get('data', {})
+    if idchain_faucet['unusedSponsorships'] < config.FAUCET_SP_BALANCE_BORDER:
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': 'IDChain Faucet does not have enough Sponsorship!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+    else:
+        if key in issues:
+            issues[key]['resolved'] = True
+            issues[key]['message'] = 'IDChain Faucet Sponsorship balance issue is resolved.'
+
+
+def monitor_service():
     while True:
         try:
-            check()
-            time.sleep(CHECK_INTERVAL)
-        except KeyboardInterrupt as e:
-            raise
+            check_sealers_activity()
         except Exception as e:
-            print('error', e)
+            print('Error check_sealers_activity', e)
+
+        try:
+            check_idchain_lock()
+        except Exception as e:
+            print('Error check_idchain_lock', e)
+
+        try:
+            check_distributor_balance()
+        except Exception as e:
+            print('Error check_distributor_balance', e)
+
+        try:
+            check_relayer_service()
+        except Exception as e:
+            print('Error check_relayer_service', e)
+
+        try:
+            check_relayer_balance()
+        except Exception as e:
+            print('Error check_relayer_balance', e)
+
+        try:
+            check_faucet_sp_balance()
+        except Exception as e:
+            print('Error check_faucet_sp_balance', e)
+
+        time.sleep(config.CHECK_INTERVAL)
+
+
+def alert_service():
+    while True:
+        check_issues()
+        time.sleep(config.CHECK_INTERVAL)
+
+
+if __name__ == '__main__':
+    print('START')
+    service1 = threading.Thread(target=monitor_service)
+    service1.start()
+    alert_service()

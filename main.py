@@ -159,7 +159,7 @@ def check_distributor_balance():
         if key not in issues:
             issues[key] = {
                 'resolved': False,
-                'message': 'Distribution contract does not have enough Eidi!',
+                'message': f'Distribution contract ({config.DISTRIBUTION_ETH_ADDRESS}) does not have enough Eidi!',
                 'started_at': int(time.time()),
                 'last_alert': 0,
                 'alert_number': 0
@@ -177,7 +177,7 @@ def check_relayer_balance():
         if key not in issues:
             issues[key] = {
                 'resolved': False,
-                'message': 'Relayer does not have enough Eidi!',
+                'message': f'Relayer ({config.RELAYER_ETH_ADDRESS}) does not have enough Eidi!',
                 'started_at': int(time.time()),
                 'last_alert': 0,
                 'alert_number': 0

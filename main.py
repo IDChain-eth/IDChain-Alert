@@ -1,6 +1,7 @@
 import pykeybasebot.types.chat1 as chat1
 from pykeybasebot import Bot
 from hashlib import sha256
+import websocket
 import threading
 import requests
 import asyncio
@@ -225,6 +226,54 @@ def check_faucet_sp_balance():
             issues[key]['message'] = 'IDChain Faucet Sponsorship balance issue is resolved.'
 
 
+def check_idchain_endpoints():
+    # check rpc endpoint
+    key = issue_hash(config.IDCHAIN_RPC_URL, 'idchain rpc endpoint')
+    payload = json.dumps({
+        'jsonrpc': '2.0',
+        'method': 'eth_blockNumber',
+        'params': [],
+        'id': 1
+    })
+    headers = {'content-type': 'application/json', 'cache-control': 'no-cache'}
+    r = requests.request('POST', config.IDCHAIN_RPC_URL,
+                         data=payload, headers=headers)
+    if not r and r.status_code != 200:
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': f'IDChain RPC endpoint ({config.IDCHAIN_RPC_URL}) is not responding!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+    else:
+        if key in issues:
+            issues[key]['resolved'] = True
+            issues[key]['message'] = 'IDChain RPC endpoint issue is resolved.'
+
+    # check ws endpoint
+    key = issue_hash(config.IDCHAIN_WS_URL, 'idchain ws endpoint')
+    try:
+        ws = websocket.WebSocket()
+        ws.connect(config.IDCHAIN_WS_URL)
+        if ws.connected:
+            if key in issues:
+                issues[key]['resolved'] = True
+                issues[key]['message'] = 'IDChain WS endpoint issue is resolved.'
+        else:
+            raise Exception('connection error')
+    except:
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': f'IDChain WS endpoint ({config.IDCHAIN_WS_URL}) is not responding!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+
+
 def monitor_service():
     while True:
         try:
@@ -256,6 +305,11 @@ def monitor_service():
             check_faucet_sp_balance()
         except Exception as e:
             print('Error check_faucet_sp_balance', e)
+
+        try:
+            check_idchain_endpoints()
+        except Exception as e:
+            print('Error check_idchain_endpoints', e)
 
         time.sleep(config.CHECK_INTERVAL)
 

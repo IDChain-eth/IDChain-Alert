@@ -1,4 +1,5 @@
 IDCHAIN_RPC_URL = 'https://idchain.one/rpc/'
+IDCHAIN_WS_URL = 'wss://idchain.one/ws/'
 SEALING_BORDER = 5
 DEADLOCK_BORDER = 15
 RELAYER_BALANCE_BORDER = 1

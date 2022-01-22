@@ -21,14 +21,25 @@ if config.KEYBASE_BOT_KEY:
     )
 
 
-def issue_hash(service, issue_name):
-    message = (service + issue_name).encode('ascii')
-    h = base64.b64encode(sha256(message).digest()).decode('ascii')
-    return h.replace('/', '_').replace('+', '-').replace('=', '')
+def how_long(ts):
+    duration = time.time() - ts
+    if duration > 24 * 60 * 60:
+        int_part = int(duration / (24 * 60 * 60))
+        str_part = 'day' if int_part == 1 else 'days'
+    elif duration > 60 * 60:
+        int_part = int(duration / (60 * 60))
+        str_part = 'hour' if int_part == 1 else 'hours'
+    elif duration > 60:
+        int_part = int(duration / 60)
+        str_part = 'minute' if int_part == 1 else 'minutes'
+    else:
+        return ''
+    return f'since {int_part} {str_part} ago'
 
 
-def alert(msg):
+def alert(issue):
     global last_sent_alert
+    msg = f"{issue['message']} {how_long(issue['started_at'])}"
     print(time.strftime('%a, %d %b %Y %H:%M:%S', time.gmtime()), msg)
     if config.KEYBASE_BOT_KEY:
         try:
@@ -59,13 +70,13 @@ def check_issues():
     for key in list(issues.keys()):
         issue = issues[key]
         if issue['resolved']:
-            res = alert(issue['message'])
+            res = alert(issue)
             if res:
                 del issues[key]
             continue
 
         if issue['last_alert'] == 0:
-            res = alert(issue['message'])
+            res = alert(issue)
             if res:
                 issue['last_alert'] = time.time()
                 issue['alert_number'] += 1
@@ -75,12 +86,18 @@ def check_issues():
                             (issue['alert_number'] - 1), config.MAX_MSG_INTERVAL)
         next_alert = issue['last_alert'] + next_interval
         if next_alert <= time.time():
-            res = alert(issue['message'])
+            res = alert(issue)
             if res:
                 issue['last_alert'] = time.time()
                 issue['alert_number'] += 1
     if time.time() - last_sent_alert > 24 * 60 * 60 and len(issues) == 0:
         res = alert("There wasn't any issue in the past 24 hours")
+
+
+def issue_hash(service, issue_name):
+    message = (service + issue_name).encode('ascii')
+    h = base64.b64encode(sha256(message).digest()).decode('ascii')
+    return h.replace('/', '_').replace('+', '-').replace('=', '')
 
 
 def get_eidi_balance(addr):
@@ -238,7 +255,7 @@ def check_idchain_endpoints():
     headers = {'content-type': 'application/json', 'cache-control': 'no-cache'}
     r = requests.request('POST', config.IDCHAIN_RPC_URL,
                          data=payload, headers=headers)
-    if not r and r.status_code != 200:
+    if not r or r.status_code != 200:
         if key not in issues:
             issues[key] = {
                 'resolved': False,
@@ -272,6 +289,82 @@ def check_idchain_endpoints():
                 'last_alert': 0,
                 'alert_number': 0
             }
+
+
+def check_idchain_explorer_service():
+    key = issue_hash(config.IDCHAIN_EXPLORER_SERVICE,
+                     'idchain explorer service')
+    r = requests.get(config.IDCHAIN_EXPLORER_SERVICE)
+    if not r or r.status_code != 200:
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': f'IDChain explorer service ({config.IDCHAIN_EXPLORER_SERVICE}) is not responding!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+    else:
+        if key in issues:
+            issues[key]['resolved'] = True
+            issues[key]['message'] = 'IDChain explorer service issue is resolved.'
+
+
+def check_idchain_aragon_service():
+    key = issue_hash(config.IDCHAIN_ARAGON_SERVICE, 'idchain aragon service')
+    r = requests.get(config.IDCHAIN_ARAGON_SERVICE)
+    if not r or r.status_code != 200:
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': f'IDChain aragon service ({config.IDCHAIN_ARAGON_SERVICE}) is not responding!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+    else:
+        if key in issues:
+            issues[key]['resolved'] = True
+            issues[key]['message'] = 'IDChain aragon service issue is resolved.'
+
+
+def check_eidi_claim_service():
+    key = issue_hash(config.EIDI_BEGIN_PAGE, 'eidi begin service')
+    r = requests.get(config.EIDI_BEGIN_PAGE)
+    if not r or r.status_code != 200:
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': f'IDChain begin page ({config.EIDI_BEGIN_PAGE}) is not responding!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+    else:
+        if key in issues:
+            issues[key]['resolved'] = True
+            issues[key]['message'] = 'IDChain begin page issue is resolved.'
+
+    key = issue_hash(config.EIDI_CLAIM_SERVICE, 'eidi begin service')
+    payload = json.dumps({
+        "addr": "0x79af508c9698076bc1c2dfa224f7829e9768b11e"
+    })
+    headers = {'content-type': 'application/json', 'cache-control': 'no-cache'}
+    r = requests.request('POST', config.EIDI_CLAIM_SERVICE,
+                         data=payload, headers=headers)
+    if not r or r.status_code != 200:
+        if key not in issues:
+            issues[key] = {
+                'resolved': False,
+                'message': f'IDChain claim service ({config.EIDI_CLAIM_SERVICE}) is not responding!',
+                'started_at': int(time.time()),
+                'last_alert': 0,
+                'alert_number': 0
+            }
+    else:
+        if key in issues:
+            issues[key]['resolved'] = True
+            issues[key]['message'] = 'IDChain claim service issue is resolved.'
 
 
 def monitor_service():
@@ -310,6 +403,21 @@ def monitor_service():
             check_idchain_endpoints()
         except Exception as e:
             print('Error check_idchain_endpoints', e)
+
+        try:
+            check_idchain_explorer_service()
+        except Exception as e:
+            print('Error check_idchain_explorer_service', e)
+
+        try:
+            check_idchain_aragon_service()
+        except Exception as e:
+            print('Error check_idchain_aragon_service', e)
+
+        try:
+            check_eidi_claim_service()
+        except Exception as e:
+            print('Error check_eidi_claim_service', e)
 
         time.sleep(config.CHECK_INTERVAL)
 

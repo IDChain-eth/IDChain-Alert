@@ -209,24 +209,6 @@ def check_relayer_balance():
             issues[key]['message'] = 'Relayer service Eidi balance issue is resolved.'
 
 
-def check_relayer_service():
-    key = issue_hash('https://idchain.one/begin/api/claim', 'relayer service')
-    r = requests.post('https://idchain.one/begin/api/claim', json={'addr': ''})
-    if r.status_code != 200:
-        if key not in issues:
-            issues[key] = {
-                'resolved': False,
-                'message': 'Relayer service is not responding!',
-                'started_at': int(time.time()),
-                'last_alert': 0,
-                'alert_number': 0
-            }
-    else:
-        if key in issues:
-            issues[key]['resolved'] = True
-            issues[key]['message'] = 'Relayer service issue is resolved.'
-
-
 def check_faucet_sp_balance():
     key = issue_hash(config.IDCHAIN_APP_URL, 'faucet sp balance')
     r = requests.get(config.IDCHAIN_APP_URL)
@@ -331,7 +313,7 @@ def check_idchain_aragon_service():
             issues[key]['message'] = 'IDChain aragon service issue is resolved.'
 
 
-def check_eidi_claim_service():
+def check_relayer_service():
     key = issue_hash(config.EIDI_BEGIN_PAGE, 'eidi begin service')
     r = requests.get(config.EIDI_BEGIN_PAGE)
     if not r or r.status_code != 200:
@@ -348,7 +330,7 @@ def check_eidi_claim_service():
             issues[key]['resolved'] = True
             issues[key]['message'] = 'IDChain begin page issue is resolved.'
 
-    key = issue_hash(config.EIDI_CLAIM_SERVICE, 'eidi begin service')
+    key = issue_hash(config.EIDI_CLAIM_SERVICE, 'idchain relayer service')
     payload = json.dumps({
         "addr": "0x79af508c9698076bc1c2dfa224f7829e9768b11e"
     })
@@ -359,7 +341,7 @@ def check_eidi_claim_service():
         if key not in issues:
             issues[key] = {
                 'resolved': False,
-                'message': f'IDChain claim service ({config.EIDI_CLAIM_SERVICE}) is not responding!',
+                'message': f'IDChain relayer service ({config.EIDI_CLAIM_SERVICE}) is not responding!',
                 'started_at': int(time.time()),
                 'last_alert': 0,
                 'alert_number': 0
@@ -367,7 +349,7 @@ def check_eidi_claim_service():
     else:
         if key in issues:
             issues[key]['resolved'] = True
-            issues[key]['message'] = 'IDChain claim service issue is resolved.'
+            issues[key]['message'] = 'IDChain relayer service issue is resolved.'
 
 
 def monitor_service():
@@ -416,11 +398,6 @@ def monitor_service():
             check_idchain_aragon_service()
         except Exception as e:
             print('Error check_idchain_aragon_service', e)
-
-        try:
-            check_eidi_claim_service()
-        except Exception as e:
-            print('Error check_eidi_claim_service', e)
 
         time.sleep(config.CHECK_INTERVAL)
 

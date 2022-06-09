@@ -209,25 +209,6 @@ def check_relayer_balance():
             issues[key]['message'] = 'Relayer service Eidi balance issue is resolved.'
 
 
-def check_faucet_sp_balance():
-    key = issue_hash(config.IDCHAIN_APP_URL, 'faucet sp balance')
-    r = requests.get(config.IDCHAIN_APP_URL)
-    idchain_faucet = r.json().get('data', {})
-    if idchain_faucet['unusedSponsorships'] < config.FAUCET_SP_BALANCE_BORDER:
-        if key not in issues:
-            issues[key] = {
-                'resolved': False,
-                'message': 'IDChain Faucet does not have enough Sponsorship!',
-                'started_at': int(time.time()),
-                'last_alert': 0,
-                'alert_number': 0
-            }
-    else:
-        if key in issues:
-            issues[key]['resolved'] = True
-            issues[key]['message'] = 'IDChain Faucet Sponsorship balance issue is resolved.'
-
-
 def check_idchain_endpoints():
     # check rpc endpoint
     key = issue_hash(config.IDCHAIN_RPC_URL, 'idchain rpc endpoint')
@@ -378,11 +359,6 @@ def monitor_service():
             check_relayer_balance()
         except Exception as e:
             print('Error check_relayer_balance', e)
-
-        try:
-            check_faucet_sp_balance()
-        except Exception as e:
-            print('Error check_faucet_sp_balance', e)
 
         try:
             check_idchain_endpoints()

@@ -134,7 +134,7 @@ def check_sealers_activity():
     sealers_count = len(status['sealerActivity'])
     for sealer, sealed_block in status['sealerActivity'].items():
         key = issue_hash(sealer, 'not sealing')
-        if sealed_block <= max(0, (num_blocks / sealers_count - config.SEALING_BORDER)):
+        if sealed_block == 0:
             if key not in issues:
                 issues[key] = {
                     'resolved': False,
@@ -143,7 +143,7 @@ def check_sealers_activity():
                     'last_alert': 0,
                     'alert_number': 0
                 }
-        else:
+        elif sealed_block >= min(config.SEALING_BORDER, (num_blocks / sealers_count)):
             if key in issues:
                 issues[key]['resolved'] = True
                 issues[key]['message'] = f'IDChain node {sealer} sealing issue is resolved.'
@@ -255,8 +255,7 @@ def check_idchain_endpoints():
                     issues[key]['message'] = f'IDChain WS endpoint ({endpoint}) issue is resolved.'
             else:
                 raise Exception('connection error')
-        except Exception as e:
-            print(e)
+        except:
             if key not in issues:
                 issues[key] = {
                     'resolved': False,

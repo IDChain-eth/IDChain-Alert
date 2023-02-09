@@ -114,7 +114,7 @@ def get_eidi_balance(addr):
         'id': 1
     })
     headers = {'content-type': 'application/json', 'cache-control': 'no-cache'}
-    r = requests.request('POST', config.IDCHAIN_RPC_URL,
+    r = requests.request('POST', config.IDCHAIN_RPC_URLS[0],
                          data=payload, headers=headers)
     return int(r.json()['result'], 0) / 10**18
 
@@ -127,7 +127,7 @@ def check_sealers_activity():
         'id': 1
     })
     headers = {'content-type': 'application/json', 'cache-control': 'no-cache'}
-    r = requests.request('POST', config.IDCHAIN_RPC_URL,
+    r = requests.request('POST', config.IDCHAIN_RPC_URLS[0],
                          data=payload, headers=headers)
     status = r.json()['result']
     num_blocks = status['numBlocks']
@@ -157,7 +157,7 @@ def check_idchain_lock():
         'id': 1
     })
     headers = {'content-type': 'application/json', 'cache-control': 'no-cache'}
-    r = requests.request('POST', config.IDCHAIN_RPC_URL,
+    r = requests.request('POST', config.IDCHAIN_RPC_URLS[0],
                          data=payload, headers=headers)
     block = r.json()['result']
     key = issue_hash('blockchain', 'idchain locked')
@@ -213,51 +213,58 @@ def check_relayer_balance():
 
 
 def check_idchain_endpoints():
-    # check rpc endpoint
-    key = issue_hash(config.IDCHAIN_RPC_URL, 'idchain rpc endpoint')
-    payload = json.dumps({
-        'jsonrpc': '2.0',
-        'method': 'eth_blockNumber',
-        'params': [],
-        'id': 1
-    })
-    headers = {'content-type': 'application/json', 'cache-control': 'no-cache'}
-    r = requests.request('POST', config.IDCHAIN_RPC_URL,
-                         data=payload, headers=headers)
-    if not r or r.status_code != 200:
-        if key not in issues:
-            issues[key] = {
-                'resolved': False,
-                'message': f'IDChain RPC endpoint ({config.IDCHAIN_RPC_URL}) is not responding!',
-                'started_at': int(time.time()),
-                'last_alert': 0,
-                'alert_number': 0
-            }
-    else:
-        if key in issues:
-            issues[key]['resolved'] = True
-            issues[key]['message'] = 'IDChain RPC endpoint issue is resolved.'
+    # check rpc endpoints
+    for endpoint in config.IDCHAIN_RPC_URLS:
+        key = issue_hash(endpoint, 'idchain rpc endpoint')
+        payload = json.dumps({
+            'jsonrpc': '2.0',
+            'method': 'eth_blockNumber',
+            'params': [],
+            'id': 1
+        })
+        headers = {'content-type': 'application/json',
+                   'cache-control': 'no-cache'}
+        try:
+            resp = requests.request(
+                'POST', endpoint, data=payload, headers=headers)
+            if resp and resp.status_code == 200:
+                if key in issues:
+                    issues[key]['resolved'] = True
+                    issues[key]['message'] = f'IDChain RPC endpoint ({endpoint}) issue is resolved.'
+            else:
+                raise Exception('connection error')
+        except:
+            if key not in issues:
+                issues[key] = {
+                    'resolved': False,
+                    'message': f'IDChain RPC endpoint ({endpoint}) is not responding!',
+                    'started_at': int(time.time()),
+                    'last_alert': 0,
+                    'alert_number': 0
+                }
 
-    # check ws endpoint
-    key = issue_hash(config.IDCHAIN_WS_URL, 'idchain ws endpoint')
-    try:
-        ws = websocket.WebSocket()
-        ws.connect(config.IDCHAIN_WS_URL)
-        if ws.connected:
-            if key in issues:
-                issues[key]['resolved'] = True
-                issues[key]['message'] = 'IDChain WS endpoint issue is resolved.'
-        else:
-            raise Exception('connection error')
-    except:
-        if key not in issues:
-            issues[key] = {
-                'resolved': False,
-                'message': f'IDChain WS endpoint ({config.IDCHAIN_WS_URL}) is not responding!',
-                'started_at': int(time.time()),
-                'last_alert': 0,
-                'alert_number': 0
-            }
+    # check ws endpoints
+    for endpoint in config.IDCHAIN_WS_URLS:
+        key = issue_hash(endpoint, 'idchain ws endpoint')
+        try:
+            ws = websocket.WebSocket()
+            ws.connect(endpoint)
+            if ws.connected:
+                if key in issues:
+                    issues[key]['resolved'] = True
+                    issues[key]['message'] = f'IDChain WS endpoint ({endpoint}) issue is resolved.'
+            else:
+                raise Exception('connection error')
+        except Exception as e:
+            print(e)
+            if key not in issues:
+                issues[key] = {
+                    'resolved': False,
+                    'message': f'IDChain WS endpoint ({endpoint}) is not responding!',
+                    'started_at': int(time.time()),
+                    'last_alert': 0,
+                    'alert_number': 0
+                }
 
 
 def check_idchain_explorer_service():

@@ -1,7 +1,7 @@
 services:
-  redis:
+  redis_custom:
     image: redis:latest
-    container_name: redis
+    container_name: redis_custom
     restart: unless-stopped
     volumes:
       - redis_data:/data
@@ -14,7 +14,7 @@ services:
     env_file:
       - config.env
     depends_on:
-      - redis
+      - redis_custom
     restart: unless-stopped
 
   alert_service:
@@ -24,7 +24,7 @@ services:
     env_file:
       - config.env
     depends_on:
-      - redis
+      - redis_custom
       - monitor_service
     restart: unless-stopped
 
@@ -36,7 +36,7 @@ services:
       - config.env
     restart: always
     depends_on:
-      - redis
+      - redis_custom
       - alert_service
       - monitor_service
 

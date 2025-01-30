@@ -1,3 +1,0 @@
-pykeybasebot
-requests
-websocket-client

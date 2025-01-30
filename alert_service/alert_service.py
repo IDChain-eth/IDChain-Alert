@@ -135,7 +135,7 @@ def send_telegram_alert(message: str) -> bool:
 def handle_resolved_issue(issue: dict) -> None:
     """Handle resolved issues by sending a message and deleting them."""
     if send_alerts(issue["message"]):
-        delete_issue(issue["issue_id"])
+        delete_issue(issue["id"])
 
 
 def handle_first_alert_issue(issue: dict):

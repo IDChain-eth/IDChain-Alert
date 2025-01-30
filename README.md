@@ -25,7 +25,7 @@ Before running the system, ensure you have:
 ### 1. Clone the Repository
 ```sh
 git clone https://github.com/IDChain-eth/IDChain-Alert.git
-cd idchain-alert
+cd IDChain-Alert
 ```
 
 ### 2. Configure Environment Variables

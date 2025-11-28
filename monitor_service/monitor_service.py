@@ -221,7 +221,7 @@ def check_https_endpoints() -> bool:
         issue_id = generate_issue_id(endpoint, "idchain https endpoint")
         issue_exists = is_issue_exists(issue_id)
         block_number_hex = send_rpc_request(
-            url=config.HTTPS_RPC_URLS[0],
+            url=endpoint,
             method="eth_blockNumber",
             params=[],
         )

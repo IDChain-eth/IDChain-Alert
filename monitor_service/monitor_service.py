@@ -267,7 +267,7 @@ def check_wss_endpoints() -> bool:
         succeeded = False
         ws = websocket.WebSocket()
         try:
-            ws.connect(endpoint)
+            ws.connect(endpoint, timeout=30)
             succeeded = ws.connected
         except Exception as e:
             logging.error(f"Failed to connect to WebSocket {endpoint}: {e}")

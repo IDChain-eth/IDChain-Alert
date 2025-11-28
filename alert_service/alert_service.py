@@ -41,7 +41,12 @@ def fetch_issues() -> list:
     for key in keys:
         issue_data = redis_client.hgetall(key)
         if issue_data:
-            issues.append(parse_issue(issue_data))
+            try:
+                issues.append(parse_issue(issue_data))
+            except (KeyError, ValueError) as e:
+                # Parse error - delete invalid issue from Redis
+                logging.warning(f"Failed to parse issue at {key}: {e}. Deleting from Redis.")
+                redis_client.delete(key)
     return issues
 
 

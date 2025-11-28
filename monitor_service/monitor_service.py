@@ -63,7 +63,7 @@ def send_rpc_request(
     url: str,
     method: str,
     params: list,
-) -> Optional[requests.Response]:
+) -> Optional[Any]:
     """Send a RPC request"""
     request_data = {
         "jsonrpc": "2.0",

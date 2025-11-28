@@ -100,7 +100,13 @@ def get_eidi_balance(addr: str) -> float:
     balance = send_rpc_request(
         url=config.HTTPS_RPC_URLS[0], method="eth_getBalance", params=[addr, "latest"]
     )
-    return int(balance, 16) / 10**18 if balance else None
+    if not balance:
+        return None
+    try:
+        return int(balance, 16) / 10**18
+    except (ValueError, TypeError) as e:
+        logging.error(f"Failed to parse balance for address {addr}: {e}. Balance value: {balance}")
+        return None
 
 
 def check_sealers_activity() -> bool:

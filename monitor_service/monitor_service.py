@@ -117,10 +117,21 @@ def check_sealers_activity() -> bool:
     if not clique_status:
         return False
 
-    sealers_count = len(clique_status["sealerActivity"])
-    for sealer, sealed_block in clique_status["sealerActivity"].items():
+    sealer_activity = clique_status.get("sealerActivity")
+    num_blocks = clique_status.get("numBlocks")
+
+    if not num_blocks or not isinstance(num_blocks, int):
+        logging.error(f"Invalid numBlocks value: {num_blocks}")
+        return False
+
+    if not sealer_activity or not isinstance(sealer_activity, dict):
+        logging.error(f"Invalid sealerActivity in clique_status: {sealer_activity}")
+        return False
+
+    sealers_count = len(sealer_activity)
+    for sealer, sealed_block in sealer_activity.items():
         check_sealer_activity(
-            sealer, sealed_block, clique_status["numBlocks"], sealers_count
+            sealer, sealed_block, num_blocks, sealers_count
         )
     return True
 

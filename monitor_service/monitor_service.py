@@ -276,8 +276,12 @@ def check_idchain_explorer_service() -> None:
         config.IDCHAIN_EXPLORER_URL, "idchain explorer service"
     )
     issue_exists = is_issue_exists(issue_id)
-    response = requests.get(config.IDCHAIN_EXPLORER_URL)
-    succeeded = response is not None and response.status_code == 200
+    try:
+        response = requests.get(config.IDCHAIN_EXPLORER_URL)
+        succeeded = response is not None and response.status_code == 200
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to check IDChain explorer service: {e}")
+        succeeded = False
     if not succeeded and not issue_exists:
         insert_new_issue(
             issue_id,
@@ -296,8 +300,12 @@ def check_idchain_aragon_service() -> None:
     """Check the health of the IDChain Aragon service."""
     issue_id = generate_issue_id(config.IDCHAIN_ARAGON_URL, "idchain aragon service")
     issue_exists = is_issue_exists(issue_id)
-    response = requests.get(config.IDCHAIN_ARAGON_URL)
-    succeeded = response is not None and response.status_code == 200
+    try:
+        response = requests.get(config.IDCHAIN_ARAGON_URL)
+        succeeded = response is not None and response.status_code == 200
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to check IDChain Aragon service: {e}")
+        succeeded = False
     if not succeeded and not issue_exists:
         insert_new_issue(
             issue_id,
@@ -314,8 +322,12 @@ def check_eidi_claim_page() -> None:
     """Check the health of the claim Eidi Page."""
     issue_id = generate_issue_id(config.EIDI_CLAIM_URL, "claim eidi page")
     issue_exists = is_issue_exists(issue_id)
-    response = requests.get(config.EIDI_CLAIM_URL)
-    succeeded = response is not None and response.status_code == 200
+    try:
+        response = requests.get(config.EIDI_CLAIM_URL)
+        succeeded = response is not None and response.status_code == 200
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to check Eidi claim page: {e}")
+        succeeded = False
     if not succeeded and not issue_exists:
         insert_new_issue(
             issue_id,

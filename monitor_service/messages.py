@@ -1,6 +1,7 @@
 ISSUE_MESSAGES = {
     "sealer_not_sealing": "⚠️ IDChain node is not sealing blocks.\nNode Address: {}",
     "sealer_sealing_resolved": "✅ IDChain node sealing issue resolved.\nNode Address: {}",
+    "sealer_removed": "✅ IDChain node sealing issue resolved: node is no longer a signer.\nNode Address: {}",
     "idchain_locked": "⚠️ IDChain is locked.\nURL: {}",
     "idchain_lock_resolved": "✅ IDChain lock issue resolved.\nURL: {}",
     "distribution_low_balance": "⚠️ Distribution contract balance is below the required threshold.\nContract Address: {}",

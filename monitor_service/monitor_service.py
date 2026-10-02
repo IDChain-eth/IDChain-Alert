@@ -19,6 +19,9 @@ logging.basicConfig(
 # Timeout in seconds for HTTP requests
 REQUEST_TIMEOUT = 15
 
+# Redis set of sealer addresses that have an open "not sealing" issue
+SEALERS_WITH_ISSUES_KEY = "sealers_with_issues"
+
 # Initialize Redis
 redis_client = redis.Redis(
     host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True
@@ -140,6 +143,13 @@ def check_sealers_activity() -> bool:
         check_sealer_activity(
             sealer, sealed_block, num_blocks, sealers_count
         )
+
+    # Resolve issues of sealers that were removed from the signer set
+    for sealer in redis_client.smembers(SEALERS_WITH_ISSUES_KEY):
+        if sealer not in sealer_activity:
+            issue_id = generate_issue_id(sealer, "not sealing block")
+            mark_issue_resolved(issue_id, ISSUE_MESSAGES["sealer_removed"].format(sealer))
+            redis_client.srem(SEALERS_WITH_ISSUES_KEY, sealer)
     return True
 
 
@@ -151,12 +161,17 @@ def check_sealer_activity(
     issue_exists = is_issue_exists(issue_id)
     if not issue_exists and sealed_block == 0:
         insert_new_issue(issue_id, ISSUE_MESSAGES["sealer_not_sealing"].format(sealer))
+        redis_client.sadd(SEALERS_WITH_ISSUES_KEY, sealer)
     elif issue_exists and sealed_block >= min(
         config.SEALING_BORDER, num_blocks / sealers_count
     ):
         mark_issue_resolved(
             issue_id, ISSUE_MESSAGES["sealer_sealing_resolved"].format(sealer)
         )
+        redis_client.srem(SEALERS_WITH_ISSUES_KEY, sealer)
+    elif issue_exists:
+        # Track issues created before this set existed
+        redis_client.sadd(SEALERS_WITH_ISSUES_KEY, sealer)
 
 
 def check_idchain_lock() -> bool:

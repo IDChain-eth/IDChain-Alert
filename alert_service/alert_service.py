@@ -16,6 +16,9 @@ logging.basicConfig(
 last_sent_alert = time.time()
 last_check = int(time.time())
 
+# Timeout in seconds for HTTP requests
+REQUEST_TIMEOUT = 15
+
 # Initialize Redis
 redis_client = redis.Redis(
     host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True
@@ -125,7 +128,10 @@ def send_telegram_alert(message: str) -> bool:
         request_data = {"chat_id": config.TELEGRAM_BOT_CHANNEL, "text": message}
         url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_KEY}/sendMessage"
         response = requests.post(
-            url, json=request_data, headers={"Content-Type": "application/json"}
+            url,
+            json=request_data,
+            headers={"Content-Type": "application/json"},
+            timeout=REQUEST_TIMEOUT,
         )
         if response.status_code == 200:
             return True

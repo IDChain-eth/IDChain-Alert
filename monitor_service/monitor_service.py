@@ -16,6 +16,9 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+# Timeout in seconds for HTTP requests
+REQUEST_TIMEOUT = 15
+
 # Initialize Redis
 redis_client = redis.Redis(
     host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True
@@ -89,7 +92,9 @@ def send_post_request(
 ) -> Optional[requests.Response]:
     """Send an HTTP request"""
     try:
-        response = requests.post(url, json=request_data, headers=headers)
+        response = requests.post(
+            url, json=request_data, headers=headers, timeout=REQUEST_TIMEOUT
+        )
         response.raise_for_status()
         return response
     except requests.exceptions.RequestException as e:
@@ -296,7 +301,7 @@ def check_idchain_explorer_service() -> None:
     )
     issue_exists = is_issue_exists(issue_id)
     try:
-        response = requests.get(config.IDCHAIN_EXPLORER_URL)
+        response = requests.get(config.IDCHAIN_EXPLORER_URL, timeout=REQUEST_TIMEOUT)
         succeeded = response is not None and response.status_code == 200
     except requests.exceptions.RequestException as e:
         logging.error(f"Failed to check IDChain explorer service: {e}")
@@ -320,7 +325,7 @@ def check_idchain_aragon_service() -> None:
     issue_id = generate_issue_id(config.IDCHAIN_ARAGON_URL, "idchain aragon service")
     issue_exists = is_issue_exists(issue_id)
     try:
-        response = requests.get(config.IDCHAIN_ARAGON_URL)
+        response = requests.get(config.IDCHAIN_ARAGON_URL, timeout=REQUEST_TIMEOUT)
         succeeded = response is not None and response.status_code == 200
     except requests.exceptions.RequestException as e:
         logging.error(f"Failed to check IDChain Aragon service: {e}")
@@ -342,7 +347,7 @@ def check_eidi_claim_page() -> None:
     issue_id = generate_issue_id(config.EIDI_CLAIM_URL, "claim eidi page")
     issue_exists = is_issue_exists(issue_id)
     try:
-        response = requests.get(config.EIDI_CLAIM_URL)
+        response = requests.get(config.EIDI_CLAIM_URL, timeout=REQUEST_TIMEOUT)
         succeeded = response is not None and response.status_code == 200
     except requests.exceptions.RequestException as e:
         logging.error(f"Failed to check Eidi claim page: {e}")

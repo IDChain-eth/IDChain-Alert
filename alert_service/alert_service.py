@@ -117,7 +117,7 @@ def send_keybase_alert(message: str) -> bool:
         asyncio.run(bot.chat.send(channel, message))
         return True
     except Exception as e:
-        logging.error(f"Keybase error: {e}")
+        logging.error(f"Keybase error: {e!r}")
         logging.error(traceback.format_exc())
         return False
 
@@ -139,7 +139,9 @@ def send_telegram_alert(message: str) -> bool:
             logging.error(f"Telegram API error: {response.text}")
             return False
     except Exception as e:
-        logging.error(f"Telegram error: {e}")
+        # Request errors include the URL, which contains the bot token
+        error = str(e).replace(config.TELEGRAM_BOT_KEY, "<redacted>")
+        logging.error(f"Telegram error: {error}")
         return False
 
 

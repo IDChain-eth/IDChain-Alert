@@ -244,10 +244,10 @@ def check_https_endpoints() -> bool:
             method="eth_blockNumber",
             params=[],
         )
-        if not block_number_hex:
-            return False
-
-        succeeded = int(block_number_hex, 16) > 0 if block_number_hex else False
+        try:
+            succeeded = int(block_number_hex, 16) > 0
+        except (ValueError, TypeError):
+            succeeded = False
         if not succeeded and not issue_exists:
             insert_new_issue(
                 issue_id,

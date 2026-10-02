@@ -16,6 +16,12 @@ logging.basicConfig(
 last_sent_alert = time.time()
 last_check = int(time.time())
 
+# Timeout in seconds for HTTP requests
+REQUEST_TIMEOUT = 15
+
+# Maximum number of queued messages per channel awaiting retry
+MAX_OUTBOX_SIZE = 100
+
 # Initialize Redis
 redis_client = redis.Redis(
     host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True
@@ -96,14 +102,37 @@ class KeybaseBot:
         return KeybaseBot._instance
 
 
+def get_senders() -> dict:
+    """Map each alert channel to its send function."""
+    return {"keybase": send_keybase_alert, "telegram": send_telegram_alert}
+
+
 def send_alerts(message: str) -> bool:
-    """Sends an alert via Keybase and Telegram."""
+    """Sends an alert via Keybase and Telegram.
+
+    If only one channel succeeds, the message is queued for the failed
+    channel and retried by retry_failed_alerts.
+    """
     global last_sent_alert
-    keybase_sent = send_keybase_alert(message)
-    telegram_sent = send_telegram_alert(message)
-    if keybase_sent or telegram_sent:
-        last_sent_alert = time.time()
-    return keybase_sent or telegram_sent
+    results = {channel: send(message) for channel, send in get_senders().items()}
+    if not any(results.values()):
+        return False
+    last_sent_alert = time.time()
+    for channel, sent in results.items():
+        if not sent:
+            redis_client.rpush(f"outbox:{channel}", message)
+            redis_client.ltrim(f"outbox:{channel}", -MAX_OUTBOX_SIZE, -1)
+    return True
+
+
+def retry_failed_alerts() -> None:
+    """Resend queued messages to channels that failed earlier, in order."""
+    for channel, send in get_senders().items():
+        key = f"outbox:{channel}"
+        while (message := redis_client.lindex(key, 0)) is not None:
+            if not send(message):
+                break
+            redis_client.lpop(key)
 
 
 def send_keybase_alert(message: str) -> bool:
@@ -114,7 +143,7 @@ def send_keybase_alert(message: str) -> bool:
         asyncio.run(bot.chat.send(channel, message))
         return True
     except Exception as e:
-        logging.error(f"Keybase error: {e}")
+        logging.error(f"Keybase error: {e!r}")
         logging.error(traceback.format_exc())
         return False
 
@@ -125,7 +154,10 @@ def send_telegram_alert(message: str) -> bool:
         request_data = {"chat_id": config.TELEGRAM_BOT_CHANNEL, "text": message}
         url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_KEY}/sendMessage"
         response = requests.post(
-            url, json=request_data, headers={"Content-Type": "application/json"}
+            url,
+            json=request_data,
+            headers={"Content-Type": "application/json"},
+            timeout=REQUEST_TIMEOUT,
         )
         if response.status_code == 200:
             return True
@@ -133,13 +165,18 @@ def send_telegram_alert(message: str) -> bool:
             logging.error(f"Telegram API error: {response.text}")
             return False
     except Exception as e:
-        logging.error(f"Telegram error: {e}")
+        # Request errors include the URL, which contains the bot token
+        error = str(e).replace(config.TELEGRAM_BOT_KEY, "<redacted>")
+        logging.error(f"Telegram error: {error}")
         return False
 
 
 def handle_resolved_issue(issue: dict) -> None:
     """Handle resolved issues by sending a message and deleting them."""
-    if send_alerts(issue["message"]):
+    if issue["alert_number"] == 0:
+        # Resolved before any alert was sent; a lone resolved message is confusing
+        delete_issue(issue["id"])
+    elif send_alerts(issue["message"]):
         delete_issue(issue["id"])
 
 
@@ -177,6 +214,7 @@ def main() -> None:
     """Main function to check and process all issues."""
     while True:
         try:
+            retry_failed_alerts()
             issues = fetch_issues()
             for issue in issues:
                 handle_issue(issue)

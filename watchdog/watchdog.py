@@ -18,6 +18,8 @@ redis_client = redis.Redis(
 SERVICES = ["monitor_service", "alert_service"]
 docker_client = docker.from_env()
 watchdog_start_time = int(time.time())
+# Start each service's grace period when the watchdog starts
+last_restart = {service: watchdog_start_time for service in SERVICES}
 
 
 def get_last_check(service_name: str) -> int:
@@ -42,13 +44,14 @@ def watchdog():
     while True:
         current_time = int(time.time())
         for service in SERVICES:
-            # Skip check if we are still in the startup grace period
-            if current_time - watchdog_start_time < config.WATCHDOG_THRESHOLD:
+            # Skip check if the service is still in its startup grace period
+            if current_time - last_restart[service] < config.WATCHDOG_THRESHOLD:
                 continue
 
             last_check = get_last_check(service)
             if current_time - last_check > config.WATCHDOG_THRESHOLD:
                 restart_service(service)
+                last_restart[service] = int(time.time())
         time.sleep(config.CHECK_INTERVAL * 3)
 
 

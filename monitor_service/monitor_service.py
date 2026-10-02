@@ -97,7 +97,7 @@ def send_post_request(
         return None
 
 
-def get_eidi_balance(addr: str) -> float:
+def get_eidi_balance(addr: str) -> Optional[float]:
     """Get the Eidi balance of an Ethereum address."""
     balance = send_rpc_request(
         url=config.HTTPS_RPC_URLS[0], method="eth_getBalance", params=[addr, "latest"]
@@ -191,7 +191,7 @@ def check_distributor_balance() -> bool:
     issue_id = generate_issue_id(config.DISTRIBUTION_ADDRESS, "eidi balance")
     issue_exists = is_issue_exists(issue_id)
     balance = get_eidi_balance(config.DISTRIBUTION_ADDRESS)
-    if not balance:
+    if balance is None:
         return False
 
     low_balance = balance < config.DISTRIBUTION_BALANCE_BORDER
@@ -217,7 +217,7 @@ def check_relayer_balance() -> bool:
     issue_id = generate_issue_id(config.RELAYER_ADDRESS, "eidi balance")
     issue_exists = is_issue_exists(issue_id)
     balance = get_eidi_balance(config.RELAYER_ADDRESS)
-    if not balance:
+    if balance is None:
         return False
 
     low_balance = balance < config.RELAYER_BALANCE_BORDER

@@ -73,6 +73,8 @@ def send_rpc_request(
     }
     headers = {"content-type": "application/json", "cache-control": "no-cache"}
     response = send_post_request(url, request_data, headers)
+    if response is None:
+        return None
     try:
         return response.json().get("result", None)
     except ValueError as e:
